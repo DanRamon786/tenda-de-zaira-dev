@@ -13,10 +13,10 @@ export const Voz = {
       if (!this.ligada || !('speechSynthesis' in window)) return res();
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(texto.replace(/[“”"]/g, ''));
-      u.lang = 'pt-BR'; if (this.voz) u.voice = this.voz; u.rate = .95; u.pitch = 1.08;
+      u.lang = 'pt-BR'; if (this.voz) u.voice = this.voz; u.rate = .95 * 1.05;   // 5% mais rápida (era .95) u.pitch = 1.08;
       let fim = false; const acaba = () => { if (!fim) { fim = true; res(); } };
       u.onend = acaba; u.onerror = acaba; u.onboundary = e => aoPalavra?.(e.charIndex);
-      setTimeout(acaba, 1500 + texto.length * 90);
+      setTimeout(acaba, 1500 + texto.length * 86);
       speechSynthesis.speak(u);
     });
   },

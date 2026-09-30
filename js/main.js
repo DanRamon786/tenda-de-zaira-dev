@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { criaCena, MESA_Y } from './cena.js';
 import { carregaZaira } from './zaira.js';
-import { Carta, Baralho, Leque, LUGAR, BARALHO, resolveImagens, texFrente, urlImagem, criaAura } from './cartas.js';
+import { Carta, Baralho, Leque, LUGAR, BARALHO, CH, resolveImagens, texFrente, urlImagem, criaAura } from './cartas.js';
 import { MotorV2 } from './motor.js';
 import { POS, ACTS, cardIntro, synthesis, pick, REACAO, numeroFalado } from './textos.js';
 import { Voz, Ouvido, contem, norma } from './voz.js';
@@ -218,7 +218,7 @@ function mostraDetalhe(t) {
   $('#detalhe').innerHTML = `<div class="fig"><img src="${u}" alt="${esc(c.pt_name)}" class="${t.rev ? 'inv' : ''}" crossorigin="anonymous">
     <div><h3>${esc(c.pt_name)}${t.rev ? ' <small style="font-size:.6em;color:var(--fumo)">(invertida)</small>' : ''}</h3><div class="pos">Casa ${t.pos} · ${esc(POS[t.pos].t)}</div></div></div>
     <dl><dt>A FIGURA</dt><dd>${esc(c.pt_desc)}</dd><dt>${t.rev ? 'NA POSIÇÃO INVERTIDA' : 'SIGNIFICADO GERAL'}</dt><dd>${esc(t.rev ? c.pt_rev : c.pt_up)}</dd></dl>
-    <div class="fonte">Texto do TAROT (R. K. West, 1986), em português.</div>`;
+`;
   $('#detalhe').classList.add('on');
 }
 function escondeDetalhe() { $('#detalhe').classList.remove('on'); }
@@ -231,6 +231,16 @@ function limpaMesa() {
   if (baralho) cena.scene.remove(baralho.g); baralho = null; aura.visible = false;
 }
 function lugarCarta(p) { const l = LUGAR[p]; return V(l.x, MESA_Y + (l.cruz ? .004 : .001), l.z); }
+// a carta que acaba de ser virada fica por cima de qualquer outra que ela cruze
+// (a casa 1 cobre a casa 2 quando abre; depois a casa 2, ao abrir, cobre a casa 1)
+function alturaAoVirar(c) {
+  const p = c.g.position; let topo = null;
+  for (const o of S.cartas3d) {
+    if (o === c) continue;
+    const q = o.g.position; if (Math.hypot(q.x - p.x, q.z - p.z) < CH * .9) topo = Math.max(topo ?? -1, q.y);
+  }
+  return topo !== null && topo >= p.y ? topo + .0012 : p.y;
+}
 function focaCarta(p) { const pos = lugarCarta(p); cena.olharPara(pos.clone().add(V(-.02, .40, .34)), pos.clone().add(V(0, 0, -.03)), 1.4); }
 
 // eventos da câmera durante a leitura
@@ -282,7 +292,7 @@ const Maestro = {
     S.sorteio = { letras: (S.nome.toUpperCase() + '   ').slice(0, 3), cs: sem.cs, estado: sem.estado };
     baralho = new Baralho(cena.scene);
     cena.olharPara(V(0, 1.28, .62), V(.05, .86, -.45), 1.2);
-    zaira.baralhoPos = BARALHO.clone(); zaira.embaralhando = true; zaira.inclina = 1; zaira.olharMesa = BARALHO.clone();
+    zaira.baralhoPos = baralho.topo; zaira.embaralhando = true; zaira.inclina = 1; zaira.olharMesa = BARALHO.clone();
     baralho.comecaEmbaralhar();
     const ritmo = setInterval(() => { MotorV2.embaralha(S.baralho); S.passadas++; carteado(); }, 110);
     await diz('Concentre-se na sua pergunta enquanto eu embaralho. Quando sentir que é a hora, me diga para parar.', { pausa: 0 });
@@ -338,9 +348,9 @@ const Maestro = {
       baralho.n--; baralho.ajusta();
       const destino = lugarCarta(t.pos);
       const lado = zaira.ladoPara(destino.x < -.05 ? -1 : 1);
-      zaira.maoPara(lado, baralho.topo.add(V(0, .02, .03)), .25);
+      zaira.maoPara(lado, baralho.topo.add(V(0, .028, 0)), .25);      // palma sobre o monte
       await sleep(180); carteado();
-      zaira.maoPara(lado, destino.clone().add(V(0, .04, -.05)), .5);
+      zaira.maoPara(lado, destino.clone().add(V(0, .03, -.06)), .5);   // acompanha a carta até a casa
       const yaw = (LUGAR[t.pos].cruz ? Math.PI / 2 : 0) + (t.rev ? Math.PI : 0);
       await c.voa(destino, { yaw, dur: 520 });
       sino(300 + t.pos * 30);
@@ -360,7 +370,8 @@ const Maestro = {
         zaira.olharMesa = pos;
         const lado = await zaira.alcanca(pos, 420);
         sino(t.card.arcana === 'major' ? 392 : 587);
-        await t.c3d.virar(); zaira.maoRepouso(lado); zaira.olharMesa = null;
+        zaira.maoRepouso(lado);                       // a mão se recolhe enquanto a carta gira
+        await t.c3d.virar(700, alturaAoVirar(t.c3d)); zaira.olharMesa = null;
         mostraDetalhe(t);
         await diz(cardIntro(t, S.nome));
         await escolhe([{ label: p === 10 ? 'Continuar' : 'Próxima carta', v: 1, fala: SEGUE, gesto: 'sim' }]);

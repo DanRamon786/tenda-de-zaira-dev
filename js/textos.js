@@ -44,19 +44,35 @@ export function cardIntro(t, nome) {
   return `${open} ${reveal}${rv} ${mean}`;
 }
 
+// nome da carta no meio da frase: "o Tolo", "a Rainha de Copas", "o Ás de Espadas"
+function nomeCorrido(c) { return c.arcana === 'major' ? c.pt_name.replace(/^(O|A|Os|As) /, m => m.toLowerCase()) : articleMinor(c); }
+function comCasa(t) { return `${nomeCorrido(t.card)} na casa ${t.pos}`; }
+// "em" + artigo: "no Mundo", "na Morte"
+const emNome = c => nomeCorrido(c).replace(/^(os|as|o|a) /, (m, a) => 'n' + a + ' ');
+const CARDINAL_F = ['', 'Uma', 'Duas', 'Três', 'Quatro', 'Cinco', 'Seis', 'Sete', 'Oito', 'Nove', 'Dez'];
+// "a, b e c"
+function lista(xs) { return xs.length < 2 ? (xs[0] || '') : xs.slice(0, -1).join(', ') + ' e ' + xs[xs.length - 1]; }
+
 export function synthesis(tiragem, nome, pergunta) {
-  const maj = tiragem.filter(t => t.card.arcana === 'major').length;
-  const rev = tiragem.filter(t => t.rev).length;
+  const maiores = tiragem.filter(t => t.card.arcana === 'major'), maj = maiores.length;
+  const invertidas = tiragem.filter(t => t.rev), rev = invertidas.length;
   const cnt = {}; tiragem.forEach(t => { if (t.card.suit) cnt[t.card.suit] = (cnt[t.card.suit] || 0) + 1; });
   const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
   const fim = tiragem[9], ime = tiragem[5];
+  const nomesMaiores = lista(maiores.map(t => nomeCorrido(t.card)));
   let s = pergunta ? `Você me trouxe uma pergunta: “${pergunta}”. ` : 'Você guardou sua pergunta em silêncio, e as cartas respeitaram isso. ';
-  s += maj >= 4 ? `Há ${maj} Arcanos Maiores na mesa. Forças maiores do que a vontade de um dia estão em movimento na sua vida. `
+  s += maj >= 4 ? `Há ${maj} Arcanos Maiores na mesa: ${nomesMaiores}. Forças maiores do que a vontade de um dia estão em movimento na sua vida. `
     : maj === 0 ? 'Nenhum Arcano Maior apareceu. O que vem pela frente depende das suas escolhas de todo dia, não do destino. '
-      : `${maj === 1 ? 'Um Arcano Maior marca' : maj + ' Arcanos Maiores marcam'} os pontos em que o destino encosta a mão no seu caminho. `;
-  if (top && top[1] >= 3) s += `O naipe de ${SUIT[top[0]].n} domina a tiragem: este é um tempo ${SUIT[top[0]].d}. `;
-  s += rev === 0 ? 'Nenhuma carta se voltou contra você. ' : rev === 1 ? 'Uma carta veio invertida: é ali que mora o nó a desatar. ' : `${rev} cartas vieram invertidas. Há energias presas pedindo cuidado. `;
-  s += `No futuro imediato, ${ime.card.pt_name}${ime.rev ? ' invertida' : ''}. E tudo culmina em ${fim.card.pt_name}${fim.rev ? ', invertida' : ''}.`;
+      : maj === 1 ? `Um só Arcano Maior, ${nomesMaiores}, marca o ponto em que o destino encosta a mão no seu caminho. `
+        : `${maj === 2 ? 'Dois' : 'Três'} Arcanos Maiores, ${nomesMaiores}, marcam os pontos em que o destino encosta a mão no seu caminho. `;
+  if (top && top[1] >= 3) {
+    const doNaipe = tiragem.filter(t => t.card.suit === top[0]).map(t => nomeCorrido(t.card));
+    s += `O naipe de ${SUIT[top[0]].n} domina a tiragem, com ${lista(doNaipe)}: este é um tempo ${SUIT[top[0]].d}. `;
+  }
+  s += rev === 0 ? 'Nenhuma carta se voltou contra você. '
+    : rev === 1 ? `Uma carta veio invertida: ${comCasa(invertidas[0])}. É ali que mora o nó a desatar. `
+      : `${CARDINAL_F[rev]} cartas vieram invertidas: ${lista(invertidas.map(comCasa))}. Há energias presas pedindo cuidado. `;
+  s += `No futuro imediato, ${nomeCorrido(ime.card)}${ime.rev ? ', invertida' : ''}. E tudo culmina ${emNome(fim.card)}${fim.rev ? ', invertida' : ''}.`;
   return s;
 }
 

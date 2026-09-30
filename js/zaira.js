@@ -7,6 +7,7 @@ import { MESA_Y } from './cena.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
+const _eixoX = new THREE.Vector3(1, 0, 0), _eixoY = new THREE.Vector3(0, 1, 0);
 
 // cores extras do figurino (multiplicam as texturas). A Zaira atual já vem repintada no arquivo
 // modelo/zaira.vrm; deixe vazio para modelos feitos no VRoid Studio.
@@ -71,11 +72,18 @@ class Zaira {
     vrm.scene.position.set(0, this.quadril.y - hy * esc, this.quadril.z);
     vrm.scene.rotation.y = 0; // o modelo VRM 1.0 olha para +Z, isto é, para o consulente
     vrm.scene.updateMatrixWorld(true);
+    // comprimento da mão (pulso até a ponta do dedo médio), para mirar a palma e não o pulso
+    const pulso = this.h('leftHand').getWorldPosition(new THREE.Vector3());
+    const dedo = this.h('leftMiddleDistal') || this.h('leftMiddleIntermediate');
+    this.Lmao = dedo ? pulso.distanceTo(dedo.getWorldPosition(new THREE.Vector3())) * 1.12 : .17;
   }
+
+  // a palma fica a ~45% do comprimento da mão à frente do pulso (a mão espalmada aponta para +Z)
+  pulsoPara(palma) { return palma.clone().add(V(0, 0, -this.Lmao * .45)); }
 
   repousoMao(lado) {
     const s = lado === 'left' ? 1 : -1;   // a esquerda da Zaira fica no +X do mundo
-    return V(.19 * s, MESA_Y + .035, -.36);
+    return V(.2 * s, MESA_Y + .035, -.42);   // pulso perto da borda dela; os dedos avançam sobre a mesa
   }
 
   acessorios() {
@@ -176,12 +184,14 @@ class Zaira {
   }
 
   // ---------- gestos ----------
-  maoPara(lado, pos, dur = .45) { const m = this.maos[lado]; m.alvo.copy(pos); m.dur = dur; }
-  maoRepouso(lado) { this.maoPara(lado, this.repousoMao(lado)); }
+  // pos = onde a PALMA deve pousar (a mão fica espalmada, dedos para a frente)
+  maoPara(lado, pos, dur = .45) { const m = this.maos[lado]; m.alvo.copy(this.pulsoPara(pos)); m.dur = dur; }
+  maoRepouso(lado) { const m = this.maos[lado]; m.alvo.copy(this.repousoMao(lado)); m.dur = .45; }
   ladoPara(x) { return x >= 0 ? 'left' : 'right'; }
   async alcanca(pos, espera = 450) {
     const lado = this.ladoPara(pos.x);
-    this.maoPara(lado, pos.clone().add(V(0, .03, .02)));
+    // encosta a palma na metade da carta mais próxima dela, por cima
+    this.maoPara(lado, pos.clone().add(V(0, .03, -.05)));
     await new Promise(r => setTimeout(r, espera));
     return lado;
   }
@@ -223,15 +233,21 @@ class Zaira {
       let alvo = m.alvo;
       if (this.embaralhando) {
         const s = lado === 'left' ? 1 : -1, f = t * 7 + (s > 0 ? 0 : Math.PI);
-        alvo = this.baralhoPos.clone().add(V(s * (.05 + .015 * Math.sin(f)), .045 + .025 * Math.max(0, Math.sin(f)), .02));
+        // as duas palmas por cima do monte, lado a lado, subindo e descendo alternadas (nunca dentro dele)
+        alvo = this.pulsoPara(this.baralhoPos.clone().add(V(s * (.052 + .01 * Math.sin(f)), .03 + .03 * Math.max(0, Math.sin(f)), 0)));
       }
       m.atual.lerp(alvo, 1 - Math.exp(-dt * (m.dur ? 3 / m.dur : 6)));
       const s = lado === 'left' ? 1 : -1;
       const ombro = this.h(lado + 'UpperArm').getWorldPosition(new THREE.Vector3());
       this.ik(lado + 'UpperArm', lado + 'LowerArm', lado + 'Hand', m.atual, ombro.clone().add(V(s * .45, -.35, -.4)));
-      // mão espalmada sobre a mesa
-      const mao = this.h(lado + 'Hand'); mao.rotation.set(0, 0, s * .15);
-      this.h(lado + 'LowerArm').rotateX(-.9 * s * 0);
+      // mão espalmada sobre a mesa: palma para baixo, dedos para a frente e um pouco para dentro,
+      // levemente inclinados para baixo (na pose T, a mão esquerda aponta para +X e a direita para -X)
+      const mao = this.h(lado + 'Hand');
+      _q.setFromAxisAngle(_eixoY, -s * (Math.PI / 2 + .22));
+      _q2.setFromAxisAngle(_eixoX, .07);
+      _q2.multiply(_q);                                     // orientação desejada no mundo
+      mao.parent.getWorldQuaternion(_q).invert();
+      mao.quaternion.copy(_q.multiply(_q2));
     }
     // pernas dobradas sob a mesa (escondidas pela toalha)
     for (const lado of ['left', 'right']) {

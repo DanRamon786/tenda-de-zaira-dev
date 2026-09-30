@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { MESA_Y } from './cena.js';
 
 export const CW = .1, CH = .172, ESP = .0006;       // carta: largura, altura, espessura
+export const RAIO = CW * .07;                        // raio dos cantos arredondados
+export const PASSO = .00038;                         // espessura de cada carta no monte (78 cartas ≈ 3 cm)
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const easeInOut = k => k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -13,20 +15,47 @@ export const LUGAR = [null,
   { x: -.1, z: .02 }, { x: -.1, z: .02, cruz: true }, { x: -.1, z: -.19 }, { x: -.1, z: .23 },
   { x: -.31, z: .02 }, { x: .11, z: .02 },
   { x: .35, z: .33 }, { x: .35, z: .13 }, { x: .35, z: -.07 }, { x: .35, z: -.27 }];
-export const BARALHO = V(.13, MESA_Y, -.37);
+export const BARALHO = V(0, MESA_Y, -.37);          // no centro, entre as mãos da Zaira (antes ficava sob a mão esquerda)
+
+// ---------- formas com cantos arredondados ----------
+function retArredondado(w, h, r) {
+  const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+  s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+  s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+  s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+  return s;
+}
+// UV de 0 a 1 a partir das coordenadas x,y da forma (a textura cobre a carta inteira)
+function uvCarta(geo, w, h) {
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / w + .5, pos.getY(i) / h + .5);
+  uv.needsUpdate = true; return geo;
+}
+// face plana da carta (no plano XY, como o PlaneGeometry que substitui)
+const geoFace = () => uvCarta(new THREE.ShapeGeometry(retArredondado(CW, CH, RAIO), 6), CW, CH);
+// bloco arredondado de altura 1 em Y, centrado na origem (a borda da carta e o corpo do monte)
+function geoBloco(w, h, r) {
+  const g = new THREE.ExtrudeGeometry(retArredondado(w, h, r), { depth: 1, bevelEnabled: false, curveSegments: 6 });
+  uvCarta(g, w, h);                  // tampas mapeiam a textura inteira; as laterais usam cor lisa
+  g.translate(0, 0, -.5); g.rotateX(-Math.PI / 2);
+  return g;
+}
 
 // ---------- texturas ----------
 function texCanvas(w, h, draw) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
+const rr = (g, x, y, w, h, r) => { r = Math.max(3, r); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
 const texVerso = texCanvas(256, 440, (g, w, h) => {
+  const R = w * .07;   // o mesmo raio da carta, em pixels
   g.fillStyle = '#f3e6c8'; g.fillRect(0, 0, w, h);
-  g.fillStyle = '#4a0f24'; g.fillRect(9, 9, w - 18, h - 18);
-  g.strokeStyle = '#c9a04e'; g.lineWidth = 3; g.strokeRect(17, 17, w - 34, h - 34);
-  g.lineWidth = 1.2; g.strokeRect(23, 23, w - 46, h - 46);
+  g.fillStyle = '#4a0f24'; rr(g, 9, 9, w - 18, h - 18, R - 7); g.fill();
+  g.strokeStyle = '#c9a04e'; g.lineWidth = 3; rr(g, 17, 17, w - 34, h - 34, R - 13); g.stroke();
+  g.lineWidth = 1.2; rr(g, 23, 23, w - 46, h - 46, R - 17); g.stroke();
   // treliça de losangos
-  g.save(); g.beginPath(); g.rect(24, 24, w - 48, h - 48); g.clip();
+  g.save(); rr(g, 24, 24, w - 48, h - 48, R - 18); g.clip();
   g.strokeStyle = 'rgba(201,160,78,.35)';
   for (let i = -h; i < w + h; i += 22) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + h, h); g.stroke(); g.beginPath(); g.moveTo(i, h); g.lineTo(i + h, 0); g.stroke(); }
   g.restore();
@@ -47,7 +76,7 @@ const ROM = ['Rei', 'Rainha', 'Cavaleiro', 'Valete', 'Ás', 'II', 'III', 'IV', '
 function texFrenteDesenhada(c) {
   return texCanvas(256, 440, (g, w, h) => {
     g.fillStyle = '#f3e6c8'; g.fillRect(0, 0, w, h);
-    g.strokeStyle = '#2b1a10'; g.lineWidth = 3; g.strokeRect(14, 14, w - 28, h - 28);
+    g.strokeStyle = '#2b1a10'; g.lineWidth = 3; rr(g, 14, 14, w - 28, h - 28, w * .07 - 10); g.stroke();
     g.fillStyle = '#2b1a10'; g.textAlign = 'center';
     g.font = 'bold 30px Georgia, serif'; g.fillText(c.arcana === 'major' ? c.number : ROM[c.rank], w / 2, 62);
     g.font = '96px serif'; g.fillText(c.arcana === 'major' ? '✶' : NAIPE[c.suit], w / 2, h / 2 + 30);
@@ -155,10 +184,10 @@ export function texFrente(c) {
 export const urlImagem = c => cacheTex[c.id]?.urlLimpa || urls[c.id] || null;
 
 // ---------- a carta ----------
-const geoPlano = new THREE.PlaneGeometry(CW, CH);
+const geoPlano = geoFace();
 const matVerso = new THREE.MeshStandardMaterial({ map: texVerso, roughness: .55 });
 const matBorda = new THREE.MeshStandardMaterial({ color: 0xe9dcc0, roughness: .8 });
-const geoBorda = new THREE.BoxGeometry(CW * .995, ESP * .9, CH * .995);
+const geoBorda = geoBloco(CW * .995, CH * .995, RAIO * .995).scale(1, ESP * .9, 1);
 
 export class Carta {
   constructor(scene, dados = null) {
@@ -189,12 +218,15 @@ export class Carta {
       passo();
     });
   }
-  async virar(dur = 700) {
-    const t0 = performance.now(), base = this.g.position.y;
+  // yFinal: altura em que a carta pousa depois de virada (acima de outra que ela cruze)
+  async virar(dur = 700, yFinal = null) {
+    const t0 = performance.now(), base = this.g.position.y, alvo = yFinal ?? base;
     return new Promise(res => {
       const passo = () => {
         const k = Math.min(1, (performance.now() - t0) / dur), e = easeInOut(k);
-        this.vira.rotation.x = Math.PI * e; this.vira.position.y = Math.sin(Math.PI * k) * .06;
+        this.g.position.y = base + (alvo - base) * e;
+        // meia carta de altura + folga: de pé, ela não atravessa a mesa nem a carta vizinha
+        this.vira.rotation.x = Math.PI * e; this.vira.position.y = Math.sin(Math.PI * k) * (CH / 2 + .015);
         if (k < 1) requestAnimationFrame(passo); else { this.vira.position.y = 0; this.aberta = true; res(); }
       };
       passo();
@@ -207,13 +239,13 @@ export class Baralho {
   constructor(scene) {
     this.scene = scene; this.n = 78;
     this.g = new THREE.Group(); this.g.position.copy(BARALHO); this.g.rotation.y = .15;
-    this.corpo = new THREE.Mesh(new THREE.BoxGeometry(CW, 1, CH), [matBorda, matBorda, matVerso, matBorda, matBorda, matBorda]);
+    this.corpo = new THREE.Mesh(geoBloco(CW, CH, RAIO), [matVerso, matBorda]);   // tampas com o verso, laterais lisas
     this.corpo.castShadow = true; this.g.add(this.corpo);
     this.ajusta(); scene.add(this.g);
     this.voando = [];
   }
-  ajusta() { const h = Math.max(this.n, 1) * ESP * 1.4; this.corpo.scale.y = h; this.corpo.position.y = h / 2; this.corpo.visible = this.n > 0; }
-  get topo() { return this.g.position.clone().add(V(0, this.n * ESP * 1.4 + .001, 0)); }
+  ajusta() { const h = Math.max(this.n, 1) * PASSO; this.corpo.scale.y = h; this.corpo.position.y = h / 2; this.corpo.visible = this.n > 0; }
+  get topo() { return this.g.position.clone().add(V(0, this.n * PASSO + .001, 0)); }
   mostra(v) { this.g.visible = v; }
 
   // embaralhar: cartas saltam de um monte para o outro, sem parar, até mandarem parar
@@ -278,7 +310,7 @@ export class Leque {
     await new Promise(res => {
       const passo = () => {
         const k = Math.min(1, (performance.now() - t0) / 700), e = easeInOut(k);
-        this.cartas.forEach((h, i) => { h.position.lerpVectors(ini[i].p, BARALHO.clone().add(V(0, i * .0003, 0)), e); h.rotation.y = ini[i].y + (.15 - ini[i].y) * e; });
+        this.cartas.forEach((h, i) => { h.position.lerpVectors(ini[i].p, BARALHO.clone().add(V(0, i * PASSO, 0)), e); h.rotation.y = ini[i].y + (.15 - ini[i].y) * e; });
         if (k < 1) requestAnimationFrame(passo); else res();
       };
       passo();
