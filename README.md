@@ -6,7 +6,9 @@ Uma leitura de Tarô em 3D. Você entra numa tenda à luz de velas, senta-se dia
 
 A Zaira é a do retrato acima: cabelos cor de mel, olhos verdes, lenço vermelho e dourado, blusa branca franzida, corpete bordô bordado, colar de âmbar e pulseiras. A tenda também segue o retrato: mesa de madeira, candelabros de três velas, bola de cristal, taças, pilão de latão, lavanda, livros com cristais, lanterna e prateleira de frascos.
 
-**Acesse:** https://danramon786.github.io/tenda-de-zaira/
+**Acesse (versão de desenvolvimento):** https://danramon786.github.io/tenda-de-zaira-dev/
+
+**Versão estável, divulgada:** https://danramon786.github.io/tenda-de-zaira/
 
 ## Como conversar com a Zaira
 
