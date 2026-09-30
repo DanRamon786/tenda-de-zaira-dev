@@ -73,8 +73,13 @@ const texVerso = texCanvas(256, 440, (g, w, h) => {
 
 const NAIPE = { cups: '🏆', pentacles: '⛤', swords: '⚔', wands: '⚚' };
 const ROM = ['Rei', 'Rainha', 'Cavaleiro', 'Valete', 'Ás', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+// frente provisória (enquanto a imagem do Commons não chega). A tela já nasce do tamanho final da carta:
+// a imagem real é depois desenhada DENTRO desta mesma tela. Trocar por uma imagem de outro tamanho
+// não funciona no WebGL (a textura já reservada não muda de tamanho) e a carta ficava com o desenho provisório.
+const FW = 512, FH = Math.round(FW * CH / CW);
 function texFrenteDesenhada(c) {
-  return texCanvas(256, 440, (g, w, h) => {
+  return texCanvas(FW, FH, (g0, W, H) => {
+    const g = g0; g.scale(W / 256, W / 256); const w = 256, h = H * 256 / W;
     g.fillStyle = '#f3e6c8'; g.fillRect(0, 0, w, h);
     g.strokeStyle = '#2b1a10'; g.lineWidth = 3; rr(g, 14, 14, w - 28, h - 28, w * .07 - 10); g.stroke();
     g.fillStyle = '#2b1a10'; g.textAlign = 'center';
@@ -159,7 +164,7 @@ function limpaScan(img) {
   // sem moldura detectada: apara só 2% de cada lado (tira o fio sujo do corte sem comer a arte)
   if (!r) r = { x: Math.round(w * .02), y: Math.round(h * .02), w: Math.round(w * .96), h: Math.round(h * .96) };
   // tela final na proporção da carta 3D, com margem creme lisa
-  const W = 512, H = Math.round(W * CH / CW), M = Math.round(W * .045);
+  const W = FW, H = FH, M = Math.round(W * .045);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d'); g.fillStyle = CREME; g.fillRect(0, 0, W, H);
   const esc = Math.min((W - 2 * M) / r.w, (H - 2 * M) / r.h);
@@ -175,9 +180,11 @@ export function texFrente(c) {
   if (cacheTex[c.id]) return cacheTex[c.id];
   const tex = texFrenteDesenhada(c); cacheTex[c.id] = tex;
   if (urls[c.id]) loader.load(urls[c.id], img => {
-    let limpa;
-    try { limpa = limpaScan(img); tex.urlLimpa = limpa.toDataURL('image/jpeg', .9); } catch (e) { limpa = img; }
-    tex.image = limpa; tex.needsUpdate = true; tex.real = true; tex.url = urls[c.id];
+    const g = tex.image.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0);
+    try { g.drawImage(limpaScan(img), 0, 0, FW, FH); }
+    catch (e) { g.fillStyle = CREME; g.fillRect(0, 0, FW, FH); g.drawImage(img, 0, 0, FW, FH); }
+    try { tex.urlLimpa = tex.image.toDataURL('image/jpeg', .9); } catch (e) { }
+    tex.needsUpdate = true; tex.real = true; tex.url = urls[c.id];
   }, undefined, () => console.warn('sem imagem', c.pt_name));
   return tex;
 }

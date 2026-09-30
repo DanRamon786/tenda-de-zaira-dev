@@ -5,7 +5,7 @@ import { criaCena, MESA_Y } from './cena.js';
 import { carregaZaira } from './zaira.js';
 import { Carta, Baralho, Leque, LUGAR, BARALHO, CH, resolveImagens, texFrente, urlImagem, criaAura } from './cartas.js';
 import { MotorV2 } from './motor.js';
-import { POS, ACTS, cardIntro, synthesis, pick, REACAO, numeroFalado } from './textos.js';
+import { POS, ACTS, cardIntro, synthesis, pick, REACAO, numeroFalado, defineInterpretacoes, temaDaLeitura, anunciaTema, comentarioFuturo, guardaCulminancia } from './textos.js';
 import { Voz, Ouvido, contem, norma } from './voz.js';
 import { Olhos } from './olhos.js';
 
@@ -44,6 +44,7 @@ if (!navigator.mediaDevices?.getUserMedia) { $('#querCam').checked = false; $('#
   try {
     const [dados] = await Promise.all([
       fetch('./data/cartas.json').then(r => r.json()),
+      fetch('./data/interpretacoes.json').then(r => r.json()).then(defineInterpretacoes).catch(e => console.warn('sem interpretações', e)),
       carregaZaira(cena, './modelo/zaira.vrm', p => { $('#carga i').style.width = (p * 100).toFixed(0) + '%'; $('#cargaTxt').textContent = 'Zaira está chegando… ' + (p * 100).toFixed(0) + '%'; }).then(z => { zaira = z; })
     ]);
     CARTAS = dados;
@@ -360,8 +361,11 @@ const Maestro = {
     return 'LEITURA';
   },
   async LEITURA() {
+    S.leitura = temaDaLeitura(S.pergunta, S.tiragem); const usadas = new Set();
     for (const a of ACTS) {
+      if (a.pausa) { aura.visible = false; escondeDetalhe(); cena.olhar('rosto', 1.2); sino(330); await sleep(1600); }   // a parada entre a casa 6 e a 7
       ato(a.name); cena.olhar('rosto', 2); await diz(pick(a.open));
+      if (a.name === 'O FUTURO') await diz(anunciaTema(S.leitura));
       for (const p of a.pos) {
         await reageCamera();
         const t = S.tiragem[p - 1];
@@ -374,6 +378,9 @@ const Maestro = {
         await t.c3d.virar(700, alturaAoVirar(t.c3d)); zaira.olharMesa = null;
         mostraDetalhe(t);
         await diz(cardIntro(t, S.nome));
+        // no futuro: um comentário pelo fio do tema; a casa 10 guarda a revelação para o fim
+        if (p >= 6 && p <= 9) { const c = comentarioFuturo(t, S.leitura.tema, usadas); if (c) await diz(c); }
+        if (p === 10) await diz(guardaCulminancia(S.leitura.tema));
         await escolhe([{ label: p === 10 ? 'Continuar' : 'Próxima carta', v: 1, fala: SEGUE, gesto: 'sim' }]);
       }
     }
@@ -382,7 +389,7 @@ const Maestro = {
   },
   async SINTESE() {
     ato('A SÍNTESE'); cena.olhar('rosto', 2);
-    await diz(synthesis(S.tiragem, S.nome, S.pergunta));
+    await diz(synthesis(S.tiragem, S.nome, S.pergunta, S.leitura));
     await escolhe([{ label: 'Agradeço, Zaira', v: 1, fala: ['obrigado', 'obrigada', 'agradeco', 'valeu', 'grato', 'grata'], gesto: 'sim' }]);
     return 'DESPEDIDA';
   },

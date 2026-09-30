@@ -8,19 +8,47 @@ export const Voz = {
     this.voz = vs.find(v => /pt[-_]BR/i.test(v.lang) && /female|luciana|francisca|maria|vit|thalita|leticia/i.test(v.name))
       || vs.find(v => /pt[-_]BR/i.test(v.lang)) || vs.find(v => /^pt/i.test(v.lang)) || null;
   },
+  // Fala frase a frase: cada frase ganha a sua entonação (a síntese do navegador lê um bloco longo
+  // numa melodia só, e as perguntas saíam como afirmações). Também evita o corte do Chrome em falas longas.
+  RATE: .95 * 1.05,   // 5% mais rápida que a voz original (.95)
+  PITCH: 1.08,
+  frases(texto) {
+    const limpo = texto.replace(/[“”"]/g, '');
+    const out = []; const re = /[^.!?…]+(?:\.\.\.|[.!?…]+)?["”]?\s*/g; let m;
+    while ((m = re.exec(limpo))) { if (m[0].trim()) out.push({ t: m[0].trim(), i: m.index }); if (re.lastIndex >= limpo.length) break; }
+    return out.length ? out : [{ t: limpo, i: 0 }];
+  },
+  prosodia(f) {
+    const t = f.trim();
+    if (/\?$/.test(t)) return { pitch: this.PITCH * 1.12, rate: this.RATE * .97, pausa: 260 };        // pergunta: sobe
+    if (/!$/.test(t)) return { pitch: this.PITCH * 1.07, rate: this.RATE * 1.04, pausa: 200 };          // exclamação: ênfase
+    if (/(\.\.\.|…)$/.test(t)) return { pitch: this.PITCH * .94, rate: this.RATE * .9, pausa: 520 };   // reticências: suspense
+    if (/^(mas|porém|cuidado|atenção|preste atenção)\b/i.test(t) || /invertida/i.test(t)) return { pitch: this.PITCH * .96, rate: this.RATE * .95, pausa: 300 };
+    return { pitch: this.PITCH, rate: this.RATE, pausa: 180 };
+  },
   fala(texto, aoPalavra) {
-    return new Promise(res => {
+    return new Promise(async res => {
       if (!this.ligada || !('speechSynthesis' in window)) return res();
       speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(texto.replace(/[“”"]/g, ''));
-      u.lang = 'pt-BR'; if (this.voz) u.voice = this.voz; u.rate = .95 * 1.05;   // 5% mais rápida (era .95) u.pitch = 1.08;
-      let fim = false; const acaba = () => { if (!fim) { fim = true; res(); } };
-      u.onend = acaba; u.onerror = acaba; u.onboundary = e => aoPalavra?.(e.charIndex);
-      setTimeout(acaba, 1500 + texto.length * 86);
-      speechSynthesis.speak(u);
+      const meu = this.turno = (this.turno || 0) + 1;       // se outra fala começar (ou cala()), esta para
+      for (const f of this.frases(texto)) {
+        if (this.turno !== meu || !this.ligada) break;
+        const p = this.prosodia(f.t);
+        await new Promise(ok => {
+          const u = new SpeechSynthesisUtterance(f.t);
+          u.lang = 'pt-BR'; if (this.voz) u.voice = this.voz; u.rate = p.rate; u.pitch = p.pitch;
+          let fim = false; const acaba = () => { if (!fim) { fim = true; ok(); } };
+          u.onend = acaba; u.onerror = acaba; u.onboundary = e => aoPalavra?.(f.i + e.charIndex);
+          setTimeout(acaba, 1200 + f.t.length * 86);
+          speechSynthesis.speak(u);
+        });
+        if (this.turno !== meu) break;
+        await new Promise(ok => setTimeout(ok, p.pausa));   // respiro entre frases
+      }
+      res();
     });
   },
-  cala() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+  cala() { this.turno = (this.turno || 0) + 1; if ('speechSynthesis' in window) speechSynthesis.cancel(); }
 };
 if ('speechSynthesis' in window) { Voz.escolhe(); speechSynthesis.onvoiceschanged = () => Voz.escolhe(); }
 
