@@ -30,12 +30,12 @@ button{font:inherit;color:inherit}
 #veu{position:fixed;inset:0;z-index:30;display:grid;place-items:center;overflow:auto;background:#12070c;transition:opacity 1.2s}
 #veu::before{content:'';position:fixed;inset:0;background:url(img/zaira.jpg) center 30%/cover no-repeat;pointer-events:none}
 #veu::after{content:'';position:fixed;inset:0;background:linear-gradient(90deg,rgba(18,7,12,.92) 0%,rgba(18,7,12,.78) 38%,rgba(18,7,12,.25) 70%,rgba(18,7,12,.55) 100%);pointer-events:none}
-#veu .entrada{position:relative;z-index:1;justify-self:start;margin-left:max(24px,6vw)}
+#veu .entrada,#veu .idioma{position:relative;z-index:1;justify-self:start;margin-left:max(24px,6vw)}
 @media (max-width:760px), (orientation:portrait){
   #veu::before{background-image:url(img/zaira-pequena.jpg);background-position:58% top;background-size:auto 36vh}
   #veu::after{background:linear-gradient(180deg,rgba(18,7,12,.1) 0%,rgba(18,7,12,.5) 26%,rgba(18,7,12,.96) 36%,#12070c 100%)}
   #veu{place-items:end center}
-  #veu .entrada{justify-self:center;margin:27vh 0 0;padding:20px 18px}
+  #veu .entrada,#veu .idioma{justify-self:center;margin:27vh 0 0;padding:20px 18px}
   .entrada h1{font-size:40px} .entrada .sub{font-size:17px;margin-bottom:14px} .entrada p{font-size:14px;margin-bottom:12px} .opcao span{font-size:12px} .opcoes{margin-bottom:16px}
 }
 #veu.some{opacity:0;pointer-events:none}
@@ -54,6 +54,20 @@ button{font:inherit;color:inherit}
 #cargaTxt{font-size:12px;color:var(--fumo);margin-top:8px;min-height:1em}
 .creditos{font-size:11.5px;color:#8d7a82;margin-top:22px;line-height:1.5}
 .creditos a{color:#b9a5ad}
+/* escolha do idioma */
+.idioma{max-width:460px;padding:32px 24px;text-align:center}
+.idioma h1{font:700 clamp(36px,7vw,54px)/1 var(--serif);color:var(--ouro);margin:0}
+.idioma .en{font:italic 500 22px/1.3 var(--serif);color:var(--fumo);margin:6px 0 26px}
+.idioma p{font-size:14px;letter-spacing:.06em;color:#d9c9cf;margin:0 0 16px}
+.linguas{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lingua{display:flex;flex-direction:column;align-items:center;gap:4px;padding:16px 10px;border-radius:16px;border:1px solid var(--borda);background:rgba(255,255,255,.04);color:var(--pergaminho);cursor:pointer;transition:background .15s,transform .15s}
+.lingua:hover,.lingua:focus-visible{background:rgba(224,187,98,.12);transform:translateY(-1px);outline:none}
+.lingua.sugerida{border-color:var(--ouro);background:rgba(224,187,98,.1)}
+.lingua b{font:700 22px/1.1 var(--serif);color:var(--ouro)}
+.lingua span{font-size:12px;color:var(--fumo)}
+.trocaLingua{background:none;border:1px solid rgba(224,187,98,.25);border-radius:999px;color:var(--fumo);font:500 12.5px/1 var(--sans);padding:7px 12px;cursor:pointer;margin-bottom:18px}
+.trocaLingua:hover{color:var(--ouro);border-color:var(--ouro)}
+[hidden]{display:none!important}
 
 /* HUD */
 #hud{position:fixed;top:max(12px,env(safe-area-inset-top));right:12px;z-index:10;display:flex;gap:8px;align-items:center}
@@ -105,29 +119,39 @@ button{font:inherit;color:inherit}
 </style>
 </head>
 <body>
-<canvas id="mundo" aria-label="A tenda de Zaira em 3D"></canvas>
+<canvas id="mundo" aria-label="A tenda de Zaira em 3D" data-i18n-aria="cenaAria"></canvas>
 
 <div id="veu">
-  <div class="entrada">
+  <div class="idioma" id="idioma">
     <h1>A Tenda de Zaira</h1>
-    <p class="sub">Velas acesas, ervas secas e um baralho de 1909.</p>
-    <p>Zaira vai ler o Tarô para você na Cruz Celta, com as dez cartas e os textos do programa TAROT de 1986. Converse com ela pela voz, ou use os botões.</p>
+    <p class="en">Zaira's Tent</p>
+    <p>Escolha o idioma · Choose your language</p>
+    <div class="linguas">
+      <button class="lingua" type="button" data-lingua="pt" lang="pt-BR"><b>Português</b><span>Brasil</span></button>
+      <button class="lingua" type="button" data-lingua="en" lang="en"><b>English</b><span>International</span></button>
+    </div>
+  </div>
+  <div class="entrada" id="entrada" hidden>
+    <button class="trocaLingua" type="button" id="trocaLingua" data-i18n-aria="trocaIdiomaAria">🌐 <span data-i18n="trocaIdioma">English</span></button>
+    <h1 data-i18n="titulo">A Tenda de Zaira</h1>
+    <p class="sub" data-i18n="sub">Velas acesas, ervas secas e um baralho de 1909.</p>
+    <p data-i18n="intro">Zaira vai ler o Tarô para você na Cruz Celta, com as dez cartas e os textos do programa TAROT de 1986. Converse com ela pela voz, ou use os botões.</p>
     <div class="opcoes">
-      <label class="opcao" id="optMic"><input type="checkbox" id="querMic" checked><div><b>Microfone</b><span>Diga seu nome, peça para ela parar de embaralhar, corte o baralho falando um número, diga "continue".</span></div></label>
-      <label class="opcao" id="optCam"><input type="checkbox" id="querCam" checked><div><b>Câmera</b><span>Zaira percebe quando você se senta, acompanha seu rosto com o olhar e entende um aceno de "sim". A imagem é analisada só no seu aparelho: nada é enviado.</span></div></label>
+      <label class="opcao" id="optMic"><input type="checkbox" id="querMic" checked><div><b data-i18n="micTitulo">Microfone</b><span data-i18n="micTexto">Diga seu nome, peça para ela parar de embaralhar, corte o baralho falando um número, diga "continue".</span></div></label>
+      <label class="opcao" id="optCam"><input type="checkbox" id="querCam" checked><div><b data-i18n="camTitulo">Câmera</b><span data-i18n="camTexto">Zaira percebe quando você se senta, acompanha seu rosto com o olhar e entende um aceno de "sim". A imagem é analisada só no seu aparelho: nada é enviado.</span></div></label>
     </div>
     <button class="btn" id="entrar" disabled>Preparando a tenda…</button>
     <div id="carga"><i></i></div><div id="cargaTxt"></div>
-    <div class="creditos">Baseado no programa TAROT (R. K. West, 1986), recuperado e traduzido por Dan Ramon Ribeiro.<br>Cartas: baralho Rider-Waite-Smith de 1909 (Pamela Colman Smith), domínio público, via Wikimedia Commons.<br>Retrato da Zaira: Dan Ramon Ribeiro. Modelo 3D a partir da amostra VRM da pixiv. Funciona melhor no Chrome ou no Edge.</div>
+    <div class="creditos" data-i18n-html="creditos">Baseado no programa TAROT (R. K. West, 1986), recuperado e traduzido por Dan Ramon Ribeiro.<br>Cartas: baralho Rider-Waite-Smith de 1909 (Pamela Colman Smith), domínio público, via Wikimedia Commons.<br>Retrato da Zaira: Dan Ramon Ribeiro. Modelo 3D a partir da amostra VRM da pixiv. Funciona melhor no Chrome ou no Edge.</div>
   </div>
 </div>
 
 <div id="hud">
-  <video id="espelho" playsinline muted aria-label="Sua imagem na câmera"></video>
-  <button class="tog" id="tMic" aria-pressed="false" title="Microfone" aria-label="Microfone"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
-  <button class="tog" id="tCam" aria-pressed="false" title="Câmera" aria-label="Câmera"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/></svg></button>
-  <button class="tog" id="tVoz" aria-pressed="true" title="Voz da Zaira" aria-label="Voz da Zaira"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg></button>
-  <button class="tog" id="tSom" aria-pressed="true" title="Som ambiente" aria-label="Som ambiente"><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button>
+  <video id="espelho" playsinline muted aria-label="Sua imagem na câmera" data-i18n-aria="espelho"></video>
+  <button class="tog" id="tMic" aria-pressed="false" title="Microfone" aria-label="Microfone" data-i18n-title="hudMic" data-i18n-aria="hudMic"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+  <button class="tog" id="tCam" aria-pressed="false" title="Câmera" aria-label="Câmera" data-i18n-title="hudCam" data-i18n-aria="hudCam"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/></svg></button>
+  <button class="tog" id="tVoz" aria-pressed="true" title="Voz da Zaira" aria-label="Voz da Zaira" data-i18n-title="hudVoz" data-i18n-aria="hudVoz"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg></button>
+  <button class="tog" id="tSom" aria-pressed="true" title="Som ambiente" aria-label="Som ambiente" data-i18n-title="hudSom" data-i18n-aria="hudSom"><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button>
 </div>
 <div id="ato"></div>
 <aside id="detalhe" aria-live="polite"></aside>

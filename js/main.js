@@ -5,7 +5,10 @@ import { criaCena, MESA_Y } from './cena.js';
 import { carregaZaira } from './zaira.js';
 import { Carta, Baralho, Leque, LUGAR, BARALHO, CH, resolveImagens, texFrente, urlImagem, criaAura } from './cartas.js';
 import { MotorV2 } from './motor.js';
-import { POS, ACTS, cardIntro, synthesis, pick, REACAO, numeroFalado, defineInterpretacoes, temaDaLeitura, anunciaTema, comentarioFuturo, guardaCulminancia } from './textos.js';
+import * as PT from './textos.js';
+import * as EN from './textos_en.js';
+import { pick } from './textos.js';
+import { t, lingua, ehIngles, defineLingua, linguaSalva, linguaDoNavegador, aplica, aoMudarLingua, nomeCarta, descCarta, sentidoCarta } from './i18n.js';
 import { Voz, Ouvido, contem, norma } from './voz.js';
 import { Olhos } from './olhos.js';
 
@@ -13,6 +16,9 @@ const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+// as falas e palavras da Zaira no idioma escolhido
+const TX = () => (ehIngles() ? EN : PT);
+const W = k => TX().PALAVRAS[k];
 
 // ---------- cena ----------
 const cena = criaCena($('#mundo'));
@@ -38,24 +44,51 @@ quadro();
 
 // ---------- carregamento ----------
 const btnEntrar = $('#entrar');
-if (!Ouvido.existe) { $('#querMic').checked = false; $('#querMic').disabled = true; $('#optMic').classList.add('indisponivel'); $('#optMic span').textContent = 'Este navegador não reconhece fala. No Chrome ou no Edge, você poderá conversar com a Zaira.'; }
+if (!Ouvido.existe) { $('#querMic').checked = false; $('#querMic').disabled = true; $('#optMic').classList.add('indisponivel'); $('#optMic span').dataset.i18n = 'micIndisp'; }
 if (!navigator.mediaDevices?.getUserMedia) { $('#querCam').checked = false; $('#querCam').disabled = true; $('#optCam').classList.add('indisponivel'); }
 (async () => {
   try {
     const [dados] = await Promise.all([
       fetch('./data/cartas.json').then(r => r.json()),
-      fetch('./data/interpretacoes.json').then(r => r.json()).then(defineInterpretacoes).catch(e => console.warn('sem interpretações', e)),
-      carregaZaira(cena, './modelo/zaira.vrm', p => { $('#carga i').style.width = (p * 100).toFixed(0) + '%'; $('#cargaTxt').textContent = 'Zaira está chegando… ' + (p * 100).toFixed(0) + '%'; }).then(z => { zaira = z; })
+      fetch('./data/interpretacoes.json').then(r => r.json()).then(PT.defineInterpretacoes).catch(e => console.warn('sem interpretações', e)),
+      fetch('./data/interpretacoes_en.json').then(r => r.json()).then(EN.defineInterpretacoes).catch(e => console.warn('sem interpretações em inglês', e)),
+      carregaZaira(cena, './modelo/zaira.vrm', p => { carga = p; $('#carga i').style.width = (p * 100).toFixed(0) + '%'; $('#cargaTxt').textContent = t('chegando', (p * 100).toFixed(0)); }).then(z => { zaira = z; })
     ]);
     CARTAS = dados;
     resolveImagens(CARTAS).then(n => console.log('imagens do Commons:', n));
-    $('#carga i').style.width = '100%'; $('#cargaTxt').textContent = '';
-    btnEntrar.disabled = false; btnEntrar.textContent = 'Entrar na tenda';
+    $('#carga i').style.width = '100%'; $('#cargaTxt').textContent = ''; carga = 1;
+    btnEntrar.disabled = false; rotuloEntrar = 'entrar'; btnEntrar.textContent = t(rotuloEntrar);
     window.PRONTO = true;
   } catch (e) {
-    console.error(e); $('#cargaTxt').textContent = 'Não consegui preparar a tenda: ' + e.message;
+    console.error(e); falhaCarga = e.message; $('#cargaTxt').textContent = t('falhaCarga', e.message);
   }
 })();
+
+// ---------- idioma ----------
+// a escolha aparece no início; ?lang=en (ou pt) no endereço pula a escolha
+let rotuloEntrar = 'preparando', carga = 0, falhaCarga = '';
+aoMudarLingua(() => {
+  btnEntrar.textContent = t(rotuloEntrar);
+  $('#cargaTxt').textContent = falhaCarga ? t('falhaCarga', falhaCarga) : carga > 0 && carga < 1 ? t('chegando', (carga * 100).toFixed(0)) : '';
+  if (fechada) $('#veu .sub').textContent = t('fechou');
+});
+let fechada = false;
+function mostraEntrada(l) {
+  defineLingua(l);
+  $('#idioma').hidden = true; $('#entrada').hidden = false;
+  (btnEntrar.disabled ? $('#trocaLingua') : btnEntrar).focus({ preventScroll: true });
+}
+document.querySelectorAll('.lingua').forEach(b => b.addEventListener('click', () => mostraEntrada(b.dataset.lingua)));
+$('#trocaLingua').addEventListener('click', () => defineLingua(ehIngles() ? 'pt' : 'en'));
+{
+  const salva = linguaSalva(), sugerida = salva || linguaDoNavegador();
+  const viaEndereco = new URLSearchParams(location.search).has('lang');
+  if (viaEndereco && salva) mostraEntrada(salva);
+  else {
+    defineLingua(sugerida);   // os textos já ficam prontos no idioma provável
+    const b = document.querySelector(`.lingua[data-lingua="${sugerida}"]`); b?.classList.add('sugerida'); b?.focus({ preventScroll: true });
+  }
+}
 
 // ---------- som ambiente ----------
 let ac = null, master = null, somOn = true;
@@ -85,33 +118,21 @@ $('#tVoz').onclick = () => { Voz.ligada = !Voz.ligada; marca($('#tVoz'), Voz.lig
 $('#tSom').onclick = () => { somOn = !somOn; marca($('#tSom'), somOn); if (master) master.gain.value = somOn ? .5 : 0; };
 $('#tMic').onclick = () => { if (Ouvido.ligado) { Ouvido.desliga(); marca($('#tMic'), false); $('#tMic').classList.remove('escutando'); } else ligaMic(); };
 $('#tCam').onclick = () => { if (Olhos.ligado) { Olhos.desliga(); marca($('#tCam'), false); $('#espelho').classList.remove('on'); } else ligaCam(); };
-const MSG_MIC = {
-  'not-allowed': 'O microfone foi bloqueado. Libere-o no cadeado da barra de endereço e toque no botão do microfone.',
-  'service-not-allowed': 'Este navegador não permite o reconhecimento de fala. Use o Chrome, ou os botões.',
-  'network': 'O reconhecimento de fala do navegador não conseguiu falar com o serviço dele (erro de rede). Use o Chrome, ou os botões.',
-  'audio-capture': 'Não encontrei um microfone neste aparelho, ou outro programa está usando o microfone.',
-  'language-not-supported': 'Este navegador não reconhece fala em português.',
-  'mudo': 'O reconhecimento de fala não respondeu neste navegador. Use o Chrome, ou os botões.'
-};
+const msgMic = e => t('mic')[e];
 const DIAG = window.__diag = [];
 function avisa(chave, texto) { DIAG.push(chave); console.warn('diagnóstico:', chave); ouvi(texto, false, 15000); }
 function desmarcaMic() { marca($('#tMic'), false); $('#tMic').classList.remove('escutando'); }
 function ligaMic() {
-  if (!Ouvido.existe) { avisa('mic:inexistente', 'Este navegador não reconhece fala. No Chrome, você poderá conversar com a Zaira.'); return; }
-  Ouvido.aoNegar = err => { desmarcaMic(); avisa('mic:' + err, MSG_MIC[err]); };
-  Ouvido.aoErro = err => { avisa('mic:' + err, MSG_MIC[err] || ('O microfone deu o erro "' + err + '".')); if (err === 'network' || err === 'audio-capture' || err === 'language-not-supported') { Ouvido.desliga(); desmarcaMic(); } };
+  if (!Ouvido.existe) { avisa('mic:inexistente', t('micInexistente')); return; }
+  Ouvido.aoNegar = err => { desmarcaMic(); avisa('mic:' + err, msgMic(err)); };
+  Ouvido.aoErro = err => { avisa('mic:' + err, msgMic(err) || t('micErro', err)); if (err === 'network' || err === 'audio-capture' || err === 'language-not-supported') { Ouvido.desliga(); desmarcaMic(); } };
   if (Ouvido.liga()) {
     marca($('#tMic'), true); $('#tMic').classList.add('escutando');
     // se em 8 s o reconhecedor nunca começou a ouvir, avisa
-    setTimeout(() => { if (Ouvido.ligado && !Ouvido.respondeu) { avisa('mic:mudo', MSG_MIC.mudo); Ouvido.desliga(); desmarcaMic(); } }, 8000);
+    setTimeout(() => { if (Ouvido.ligado && !Ouvido.respondeu) { avisa('mic:mudo', msgMic('mudo')); Ouvido.desliga(); desmarcaMic(); } }, 8000);
   }
 }
-const MSG_CAM = {
-  NotAllowedError: 'A câmera foi bloqueada. Libere-a no cadeado da barra de endereço e toque no botão da câmera.',
-  NotFoundError: 'Não encontrei uma câmera neste aparelho.',
-  NotReadableError: 'A câmera está sendo usada por outro programa.',
-  OverconstrainedError: 'A câmera não aceitou o tamanho de imagem pedido.'
-};
+const msgCam = e => t('cam')[e];
 async function ligaCam(stream) {
   try {
     marca($('#tCam'), true); $('#espelho').classList.add('on');
@@ -119,8 +140,7 @@ async function ligaCam(stream) {
   } catch (e) {
     console.warn(e); marca($('#tCam'), false); $('#espelho').classList.remove('on'); Olhos.desliga();
     const etapa = Olhos.etapa;
-    const texto = MSG_CAM[e.name] || (etapa === 'modelo' ? 'Não consegui carregar o reconhecimento de rosto. A consulta segue sem a câmera.'
-      : etapa === 'video' ? 'A câmera abriu, mas a imagem não começou. A consulta segue sem ela.' : 'Não consegui usar a câmera (' + (e.name || e.message) + '). A consulta segue sem ela.');
+    const texto = msgCam(e.name) || (etapa === 'modelo' ? t('camModelo') : etapa === 'video' ? t('camVideo') : t('camOutro', e.name || e.message));
     avisa('cam:' + etapa + ':' + (e.name || 'erro'), texto);
   }
 }
@@ -133,8 +153,8 @@ async function ligaSensores() {
       stream = await navigator.mediaDevices.getUserMedia({ audio: querMic, video: querCam ? { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } : false });
     } catch (e) {
       console.warn('permissão conjunta:', e);
-      if (querMic && querCam) { try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }); } catch (e2) { avisa('cam:permissao:' + e2.name, MSG_CAM[e2.name] || 'Não consegui usar a câmera.'); } }
-      else if (querCam) avisa('cam:permissao:' + e.name, MSG_CAM[e.name] || 'Não consegui usar a câmera.');
+      if (querMic && querCam) { try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }); } catch (e2) { avisa('cam:permissao:' + e2.name, msgCam(e2.name) || t('camFalhou')); } }
+      else if (querCam) avisa('cam:permissao:' + e.name, msgCam(e.name) || t('camFalhou'));
     }
   }
   // o reconhecimento de fala abre o microfone por conta própria: solta o nosso para não ocupá-lo
@@ -146,7 +166,7 @@ async function ligaSensores() {
 }
 let ouviTimer = 0;
 function ouvi(t, html = false, ms = 5000) { const el = $('#ouvi'); if (html) el.innerHTML = t; else el.textContent = t; clearTimeout(ouviTimer); ouviTimer = setTimeout(() => el.textContent = '', ms); }
-Ouvido.ouve((alts, fim) => { if (alts[0]) ouvi('Ouvi: <b>' + esc(alts[0]) + '</b>' + (fim ? '' : '…'), true); });
+Ouvido.ouve((alts, fim) => { if (alts[0]) ouvi(t('ouvi', esc(alts[0])) + (fim ? '' : '…'), true); });
 
 // ---------- fala da Zaira ----------
 let pulaDigitar = null;
@@ -183,9 +203,9 @@ function escolhe(opcoes, { dica = '' } = {}) {
     const offV = Ouvido.ouve((alts, final) => {
       for (const o of opcoes) if (o.fala && (final || o.rapido) && contem(alts, o.fala)) { sino(880); fim(o.v); return; }
       // ouviu algo que não é nenhuma das opções: diz o que ouviu e o que pode ser dito
-      if (final) { const ex = opcoes.filter(o => o.fala).map(o => '"' + o.fala[0] + '"'); if (ex.length) ouvi('Ouvi <b>' + esc(alts[0]) + '</b>, mas não entendi. Diga ' + ex.join(' ou ') + '.', true, 6000); }
+      if (final) { const ex = opcoes.filter(o => o.fala).map(o => '"' + o.fala[0] + '"'); if (ex.length) ouvi(t('naoEntendi', esc(alts[0]), ex), true, 6000); }
     });
-    const offO = Olhos.ouve(ev => { for (const o of opcoes) if (o.gesto === ev) { sino(880); ouvi(ev === 'sim' ? 'Vi você acenar que sim.' : 'Vi você balançar a cabeça.'); fim(o.v); return; } });
+    const offO = Olhos.ouve(ev => { for (const o of opcoes) if (o.gesto === ev) { sino(880); ouvi(ev === 'sim' ? t('viSim') : t('viNao')); fim(o.v); return; } });
   });
 }
 
@@ -200,7 +220,7 @@ function pedeTexto(placeholder, ok, pular, limpa = s => s) {
     inp.addEventListener('input', () => clearTimeout(auto));
     if (pular) f.querySelector('.fantasma').onclick = () => fim('');
     const off = Ouvido.ouve((alts, final) => {
-      if (pular && final && contem(alts, ['guardar', 'guarde', 'silencio', 'segredo', 'nenhuma', 'pular'])) { fim(''); return; }
+      if (pular && final && contem(alts, W('guardar'))) { fim(''); return; }
       const t = limpa(alts[0]); if (!t) return;
       inp.value = t;
       if (final) { clearTimeout(auto); auto = setTimeout(() => fim(inp.value.trim()), 1100); }
@@ -208,17 +228,14 @@ function pedeTexto(placeholder, ok, pular, limpa = s => s) {
     $('#ui').appendChild(f); if (!matchMedia('(pointer: coarse)').matches) inp.focus({ preventScroll: true });
   });
 }
-const limpaNome = s => {
-  let t = s.replace(/^(meu nome (é|e)|eu sou (o|a)?|me chamo|pode me chamar de|sou (o|a)?|é|e)\s+/i, '').replace(/[.!?,]/g, '').trim();
-  return t.split(/\s+/).slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-};
+const limpaNome = s => TX().limpaNome(s);
 
 // ---------- detalhe da carta ----------
-function mostraDetalhe(t) {
-  const c = t.card, u = urlImagem(c) || texFrente(c).image?.toDataURL?.() || '';
-  $('#detalhe').innerHTML = `<div class="fig"><img src="${u}" alt="${esc(c.pt_name)}" class="${t.rev ? 'inv' : ''}" crossorigin="anonymous">
-    <div><h3>${esc(c.pt_name)}${t.rev ? ' <small style="font-size:.6em;color:var(--fumo)">(invertida)</small>' : ''}</h3><div class="pos">Casa ${t.pos} · ${esc(POS[t.pos].t)}</div></div></div>
-    <dl><dt>A FIGURA</dt><dd>${esc(c.pt_desc)}</dd><dt>${t.rev ? 'NA POSIÇÃO INVERTIDA' : 'SIGNIFICADO GERAL'}</dt><dd>${esc(t.rev ? c.pt_rev : c.pt_up)}</dd></dl>
+function mostraDetalhe(tt) {
+  const c = tt.card, u = urlImagem(c) || texFrente(c).image?.toDataURL?.() || '';
+  $('#detalhe').innerHTML = `<div class="fig"><img src="${u}" alt="${esc(nomeCarta(c))}" class="${tt.rev ? 'inv' : ''}" crossorigin="anonymous">
+    <div><h3>${esc(nomeCarta(c))}${tt.rev ? ` <small style="font-size:.6em;color:var(--fumo)">(${t('invertida')})</small>` : ''}</h3><div class="pos">${t('casa', tt.pos)} · ${esc(TX().POS[tt.pos].t)}</div></div></div>
+    <dl><dt>${t('figura')}</dt><dd>${esc(descCarta(c))}</dd><dt>${tt.rev ? t('naInvertida') : t('geral')}</dt><dd>${esc(sentidoCarta(c, tt.rev))}</dd></dl>
 `;
   $('#detalhe').classList.add('on');
 }
@@ -249,16 +266,13 @@ let sorriuPendente = false, saiuPendente = false;
 Olhos.ouve(ev => { if (ev === 'sorriso') sorriuPendente = true; if (ev === 'saiu') saiuPendente = true; if (ev === 'chegou') saiuPendente = false; });
 async function reageCamera() {
   if (saiuPendente && Olhos.ligado) {
-    await diz(pick(REACAO.ausente));
+    await diz(pick(TX().REACAO.ausente));
     const t0 = performance.now(); while (!Olhos.presente && performance.now() - t0 < 12000) await sleep(200);
     saiuPendente = false;
   }
-  if (sorriuPendente && !S.sorriu) { sorriuPendente = false; S.sorriu = true; zaira.expressao = 'happy'; await diz(pick(REACAO.sorriso)); zaira.expressao = null; }
+  if (sorriuPendente && !S.sorriu) { sorriuPendente = false; S.sorriu = true; zaira.expressao = 'happy'; await diz(pick(TX().REACAO.sorriso)); zaira.expressao = null; }
 }
 
-const SIM = ['sim', 'quero', 'pode', 'leia', 'claro', 'vamos', 'aceito', 'por favor', 'uhum'];
-const NAO = ['nao', 'hoje nao', 'agora nao', 'depois'];
-const SEGUE = ['proxima', 'continue', 'continua', 'continuar', 'pode seguir', 'siga', 'segue', 'avante', 'ok', 'certo', 'vai', 'pode', 'entendi'];
 
 // ---------- o Maestro ----------
 const Maestro = {
@@ -268,23 +282,23 @@ const Maestro = {
     cena.olhar('rosto', 1);
     if (Olhos.ligado && !Olhos.presente) {
       const t0 = performance.now(); while (!Olhos.presente && performance.now() - t0 < 5000) await sleep(150);
-      if (!Olhos.presente) await diz('Chegue mais perto da luz das velas. Quero ver o seu rosto.');
+      if (!Olhos.presente) await diz(TX().FALA.chegue);
       const t1 = performance.now(); while (!Olhos.presente && performance.now() - t1 < 6000) await sleep(150);
     }
     zaira.expressao = 'happy';
-    await diz(pick(['Ah... você entrou. Eu sabia que viria alguém esta noite. Sente-se, a cadeira é sua.', 'Boas-vindas à minha tenda. Os incensos já estavam acesos, como se esperassem por você.']));
+    await diz(TX().FALA.boasVindas());
     zaira.expressao = null;
-    await diz('Eu sou Zaira. Leio o Tarô como minha avó lia, e a avó dela antes. Deseja que eu abra as cartas para você?');
-    const v = await escolhe([{ label: 'Sim, leia minha sorte', v: true, fala: SIM, gesto: 'sim' }, { label: 'Hoje não', v: false, fantasma: true, fala: NAO, gesto: 'nao' }]);
+    await diz(TX().FALA.apresenta);
+    const v = await escolhe([{ label: t('sim'), v: true, fala: W('sim'), gesto: 'sim' }, { label: t('naoHoje'), v: false, fantasma: true, fala: W('nao'), gesto: 'nao' }]);
     return v ? 'NOME' : 'RECUSA';
   },
-  async RECUSA() { zaira.expressao = 'sad'; await diz('Nem toda noite é noite de saber. A cortina estará aberta quando você voltar.'); zaira.expressao = null; return 'DESAPARECER'; },
+  async RECUSA() { zaira.expressao = 'sad'; await diz(TX().FALA.recusa); zaira.expressao = null; return 'DESAPARECER'; },
   async NOME() {
-    await diz('Como devo chamar você?');
-    S.nome = (await pedeTexto('Seu nome', 'Dizer', null, limpaNome)).replace(/\s+/g, ' ').slice(0, 40) || 'viajante';
+    await diz(TX().FALA.pedeNome);
+    S.nome = (await pedeTexto(t('seuNome'), t('dizer'), null, limpaNome)).replace(/\s+/g, ' ').slice(0, 40) || t('viajante');
     zaira.expressao = 'relaxed';
-    await diz(`${S.nome}... um nome bonito, carrega um som antigo. Agora pense numa pergunta. Pode dizê-la para mim, ou guardá-la só no seu coração.`);
-    S.pergunta = await pedeTexto('Sua pergunta (opcional)', 'Perguntar', 'Guardar em silêncio', s => s.charAt(0).toUpperCase() + s.slice(1));
+    await diz(TX().FALA.nomeBonito(S.nome));
+    S.pergunta = await pedeTexto(t('suaPergunta'), t('perguntar'), t('guardar'), s => s.charAt(0).toUpperCase() + s.slice(1));
     return 'EMBARALHAR';
   },
   async EMBARALHAR() {
@@ -296,10 +310,10 @@ const Maestro = {
     zaira.baralhoPos = baralho.topo; zaira.embaralhando = true; zaira.inclina = 1; zaira.olharMesa = BARALHO.clone();
     baralho.comecaEmbaralhar();
     const ritmo = setInterval(() => { MotorV2.embaralha(S.baralho); S.passadas++; carteado(); }, 110);
-    await diz('Concentre-se na sua pergunta enquanto eu embaralho. Quando sentir que é a hora, me diga para parar.', { pausa: 0 });
+    await diz(TX().FALA.embaralha, { pausa: 0 });
     zaira.olharMesa = null;
     while (S.passadas < 3) await sleep(60);
-    await escolhe([{ label: 'Parar', v: 1, fala: ['pare', 'para', 'parar', 'chega', 'pronto', 'agora', 'basta', 'stop'], rapido: true }], { dica: Ouvido.ligado ? 'Diga <b>"pare"</b>' : '' });
+    await escolhe([{ label: t('parar'), v: 1, fala: W('pare'), rapido: true }], { dica: Ouvido.ligado ? t('digaPare') : '' });
     clearInterval(ritmo); baralho.paraEmbaralhar(); zaira.embaralhando = false; zaira.inclina = 0;
     zaira.maoRepouso('left'); zaira.maoRepouso('right'); sino(440);
     return 'CORTE';
@@ -310,10 +324,10 @@ const Maestro = {
     cena.olhar('corte', 1.2);
     const atualiza = n => { const b = $('#corteN'); if (b) b.textContent = n; };
     leque.aoMudar = atualiza;
-    await diz('Abri o baralho diante de você. Toque onde quer cortar, ou me diga um número de 1 a 77. As cartas acima do corte irão para baixo do monte.', { pausa: 0 });
+    await diz(TX().FALA.abreCorte, { pausa: 0 });
     limpaUI(); $('#fala').innerHTML = '';
     const box = document.createElement('div'); box.style.display = 'contents';
-    box.innerHTML = `<button class="btn redondo fantasma" type="button" aria-label="Uma carta para a esquerda">◀</button><span class="dica">Corte na carta <b id="corteN">${leque.corte}</b> de 78</span><button class="btn redondo fantasma" type="button" aria-label="Uma carta para a direita">▶</button><button class="btn" type="button">Cortar aqui</button>`;
+    box.innerHTML = `<button class="btn redondo fantasma" type="button" aria-label="${esc(t('corteEsq'))}">◀</button><span class="dica">${t('cortePara', leque.corte)}</span><button class="btn redondo fantasma" type="button" aria-label="${esc(t('corteDir'))}">▶</button><button class="btn" type="button">${esc(t('cortarAqui'))}</button>`;
     $('#ui').appendChild(box);
     const [menos, mais, cortar] = box.querySelectorAll('button');
     menos.onclick = () => leque.define(leque.corte - 1); mais.onclick = () => leque.define(leque.corte + 1);
@@ -325,24 +339,24 @@ const Maestro = {
       cortar.onclick = () => acaba(); cortar.focus({ preventScroll: true });
       const off = Ouvido.ouve((alts, final) => {
         if (!final) return;
-        const n = numeroFalado(alts[0]);
-        if (n && n >= 1 && n <= 77) { leque.define(n); if (contem(alts, ['corte', 'corta', 'cortar', 'aqui', 'na', 'no', 'carta'])) acaba(900); }
-        else if (contem(alts, ['aqui', 'corte', 'corta', 'cortar', 'essa', 'esta', 'pode'])) acaba();
-        else if (contem(alts, ['esquerda', 'menos'])) leque.define(leque.corte - 3);
-        else if (contem(alts, ['direita', 'mais'])) leque.define(leque.corte + 3);
+        const n = TX().numeroFalado(alts[0]);
+        if (n && n >= 1 && n <= 77) { leque.define(n); if (contem(alts, W('cortaNumero'))) acaba(900); }
+        else if (contem(alts, W('cortaJa'))) acaba();
+        else if (contem(alts, W('esquerda'))) leque.define(leque.corte - 3);
+        else if (contem(alts, W('direita'))) leque.define(leque.corte + 3);
       });
     });
     removeEventListener('keydown', teclas); limpaUI();
     S.corte = leque.corte; S.baralho = MotorV2.corta(S.baralho, S.corte); sino(520);
     await leque.recolhe(); baralho.mostra(true);
-    await diz(pick([`Na carta ${S.corte}. Assim seja.`, `Você cortou na carta ${S.corte}. As cartas já sabem o caminho.`]));
+    await diz(TX().FALA.cortou(S.corte));
     return 'TIRAGEM';
   },
   async TIRAGEM() {
     S.tiragem = MotorV2.tira(S.baralho).map(t => ({ pos: t.pos, card: CARTAS[t.id - 1], rev: t.inv > 0 }));
     S.tiragem.forEach(t => texFrente(t.card));   // já começa a carregar as imagens
     cena.olhar('mesa', 1.1);
-    const fala = diz('As cartas agora encontram seus lugares. Dez casas, uma cruz e um cajado.', { pausa: 0 });
+    const fala = diz(TX().FALA.distribui, { pausa: 0 });
     for (const t of S.tiragem) {
       const c = new Carta(cena.scene, t.card); S.cartas3d.push(c); t.c3d = c;
       c.g.position.copy(baralho.topo); c.g.rotation.y = baralho.g.rotation.y;
@@ -361,42 +375,42 @@ const Maestro = {
     return 'LEITURA';
   },
   async LEITURA() {
-    S.leitura = temaDaLeitura(S.pergunta, S.tiragem); const usadas = new Set();
-    for (const a of ACTS) {
+    const X = TX(); S.leitura = X.temaDaLeitura(S.pergunta, S.tiragem); const usadas = new Set();
+    for (const a of X.ACTS) {
       if (a.pausa) { aura.visible = false; escondeDetalhe(); cena.olhar('rosto', 1.2); sino(330); await sleep(1600); }   // a parada entre a casa 6 e a 7
       ato(a.name); cena.olhar('rosto', 2); await diz(pick(a.open));
-      if (a.name === 'O FUTURO') await diz(anunciaTema(S.leitura));
+      if (a.futuro) await diz(X.anunciaTema(S.leitura));
       for (const p of a.pos) {
         await reageCamera();
-        const t = S.tiragem[p - 1];
+        const ct = S.tiragem[p - 1];
         focaCarta(p);
         const pos = lugarCarta(p); aura.position.copy(pos).add(V(0, -.0005, 0)); aura.rotation.z = LUGAR[p].cruz ? Math.PI / 2 : 0; aura.visible = true;
         zaira.olharMesa = pos;
         const lado = await zaira.alcanca(pos, 420);
-        sino(t.card.arcana === 'major' ? 392 : 587);
+        sino(ct.card.arcana === 'major' ? 392 : 587);
         zaira.maoRepouso(lado);                       // a mão se recolhe enquanto a carta gira
-        await t.c3d.virar(700, alturaAoVirar(t.c3d)); zaira.olharMesa = null;
-        mostraDetalhe(t);
-        await diz(cardIntro(t, S.nome));
+        await ct.c3d.virar(700, alturaAoVirar(ct.c3d)); zaira.olharMesa = null;
+        mostraDetalhe(ct);
+        await diz(X.cardIntro(ct, S.nome));
         // no futuro: um comentário pelo fio do tema; a casa 10 guarda a revelação para o fim
-        if (p >= 6 && p <= 9) { const c = comentarioFuturo(t, S.leitura.tema, usadas); if (c) await diz(c); }
-        if (p === 10) await diz(guardaCulminancia(S.leitura.tema));
-        await escolhe([{ label: p === 10 ? 'Continuar' : 'Próxima carta', v: 1, fala: SEGUE, gesto: 'sim' }]);
+        if (p >= 6 && p <= 9) { const c = X.comentarioFuturo(ct, S.leitura.tema, usadas); if (c) await diz(c); }
+        if (p === 10) await diz(X.guardaCulminancia(S.leitura.tema));
+        await escolhe([{ label: p === 10 ? t('continuar') : t('proxima'), v: 1, fala: W('segue'), gesto: 'sim' }]);
       }
     }
     aura.visible = false; escondeDetalhe();
     return 'SINTESE';
   },
   async SINTESE() {
-    ato('A SÍNTESE'); cena.olhar('rosto', 2);
-    await diz(synthesis(S.tiragem, S.nome, S.pergunta, S.leitura));
-    await escolhe([{ label: 'Agradeço, Zaira', v: 1, fala: ['obrigado', 'obrigada', 'agradeco', 'valeu', 'grato', 'grata'], gesto: 'sim' }]);
+    ato(t('sintese')); cena.olhar('rosto', 2);
+    await diz(TX().synthesis(S.tiragem, S.nome, S.pergunta, S.leitura));
+    await escolhe([{ label: t('agradeco'), v: 1, fala: W('obrigado'), gesto: 'sim' }]);
     return 'DESPEDIDA';
   },
   async DESPEDIDA() {
     ato(''); zaira.expressao = 'happy';
-    await diz(pick([`Obrigada por confiar em mim, ${S.nome}. Lembre-se: as cartas mostram caminhos, mas quem caminha é você.`, `Eu agradeço a sua visita, ${S.nome}. O que ouviu aqui é um mapa, não uma sentença. Use-o com coragem.`]));
-    await diz('Leve com você só o que acender uma luz. O resto, deixe aqui na mesa, junto com a fumaça.');
+    await diz(TX().FALA.despedida(S.nome));
+    await diz(TX().FALA.fumaca);
     zaira.expressao = null;
     return 'DESAPARECER';
   },
@@ -404,10 +418,10 @@ const Maestro = {
     sopro(); const p = zaira.vrm.scene.position.clone().add(V(0, .5, .1));
     cena.soltaFumaca(p, 60, 3, 0xb89ab8); cena.escuro = 1;
     await sleep(700); zaira.some(); await sleep(1300); cena.escuro = 0;
-    $('#fala').innerHTML = '<span class="txt" style="font-style:italic;color:var(--fumo)">A cadeira de Zaira está vazia. Só o cheiro de incenso ficou.</span>';
-    const opcoes = [{ label: 'Nova consulta', v: 'VOLTA', fala: ['nova', 'outra', 'de novo', 'novamente'] }];
-    if (S.tiragem.length) opcoes.push({ label: 'Rever', v: 'REVER', fantasma: true, fala: ['rever', 'ver', 'mostrar'] });
-    opcoes.push({ label: 'Finalizar', v: 'FINALIZAR', fantasma: true, fala: ['finalizar', 'sair', 'terminar', 'encerrar', 'tchau'] });
+    $('#fala').innerHTML = `<span class="txt" style="font-style:italic;color:var(--fumo)">${esc(t('cadeiraVazia'))}</span>`;
+    const opcoes = [{ label: t('nova'), v: 'VOLTA', fala: W('nova') }];
+    if (S.tiragem.length) opcoes.push({ label: t('rever'), v: 'REVER', fantasma: true, fala: W('rever') });
+    opcoes.push({ label: t('finalizar'), v: 'FINALIZAR', fantasma: true, fala: W('finalizar') });
     return await escolhe(opcoes);
   },
   async VOLTA() {
@@ -416,9 +430,9 @@ const Maestro = {
     return 'CONVITE';
   },
   async REVER() {
-    ato('A TIRAGEM'); cena.olhar('mesa', 1);
-    $('#fala').innerHTML = `<span class="txt" style="font-size:.85em;color:var(--fumo)">Toque em qualquer carta da mesa, ou diga "carta 3", para ler de novo o que ela diz.</span>` +
-      `<div id="sorteio">sorteio: letras ${esc(S.sorteio.letras)} · relógio ${S.sorteio.cs} · estado ${S.sorteio.estado} · passadas ${S.passadas} · corte ${S.corte}<br>no BASIC: tarotsrt V2 ${S.sorteio.estado} ${S.passadas} ${S.corte}</div>`;
+    ato(t('tiragem')); cena.olhar('mesa', 1);
+    $('#fala').innerHTML = `<span class="txt" style="font-size:.85em;color:var(--fumo)">${esc(t('reverDica'))}</span>` +
+      `<div id="sorteio">${t('sorteio', esc(S.sorteio.letras), S.sorteio.cs, S.sorteio.estado, S.passadas, S.corte)}<br>${t('noBasic')}: tarotsrt V2 ${S.sorteio.estado} ${S.passadas} ${S.corte}</div>`;
     const mostra = p => { const t = S.tiragem[p - 1]; mostraDetalhe(t); const pos = lugarCarta(p); aura.position.copy(pos); aura.rotation.z = LUGAR[p].cruz ? Math.PI / 2 : 0; aura.visible = true; };
     mostra(1);
     const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), dom = $('#mundo');
@@ -429,8 +443,8 @@ const Maestro = {
       if (hit) { let o = hit.object; while (o && !o.userData.carta) o = o.parent; const i = S.cartas3d.indexOf(o?.userData.carta); if (i >= 0) mostra(i + 1); }
     };
     dom.addEventListener('pointerdown', toque);
-    const off = Ouvido.ouve((alts, final) => { if (!final) return; const n = numeroFalado(alts[0]); if (n >= 1 && n <= 10) mostra(n); });
-    const v = await escolhe([{ label: 'Nova consulta', v: 'VOLTA', fala: ['nova', 'outra', 'de novo', 'novamente'] }, { label: 'Finalizar', v: 'FINALIZAR', fantasma: true, fala: ['finalizar', 'sair', 'terminar', 'encerrar', 'tchau'] }]);
+    const off = Ouvido.ouve((alts, final) => { if (!final) return; const n = TX().numeroFalado(alts[0]); if (n >= 1 && n <= 10) mostra(n); });
+    const v = await escolhe([{ label: t('nova'), v: 'VOLTA', fala: W('nova') }, { label: t('finalizar'), v: 'FINALIZAR', fantasma: true, fala: W('finalizar') }]);
     dom.removeEventListener('pointerdown', toque); off(); escondeDetalhe(); aura.visible = false;
     return v;
   },
@@ -439,14 +453,15 @@ const Maestro = {
     limpaMesa(); escondeDetalhe(); ato(''); $('#fala').textContent = ''; limpaUI();
     Ouvido.desliga(); Olhos.desliga(); marca($('#tMic'), false); marca($('#tCam'), false); $('#tMic').classList.remove('escutando'); $('#espelho').classList.remove('on');
     cena.olhar('porta', .6);
-    const v = $('#veu'); v.querySelector('.sub').textContent = 'A cortina se fechou. Obrigada pela visita. Quando quiser, Zaira estará à sua espera.';
-    btnEntrar.textContent = 'Voltar à tenda'; v.classList.remove('some');
+    const v = $('#veu'); fechada = true; v.querySelector('.sub').textContent = t('fechou');
+    rotuloEntrar = 'voltar'; btnEntrar.textContent = t(rotuloEntrar); v.classList.remove('some');
     return null;
   }
 };
 async function roda(estado) { while (estado) { window.ESTADO = estado; estado = await Maestro[estado](); } }
 
 btnEntrar.addEventListener('click', async () => {
+  fechada = false;
   iniciaSom(); if (ac?.state === 'suspended') ac.resume();
   if (master && ac) master.gain.setTargetAtTime(somOn ? .5 : 0, ac.currentTime, .3);
   if (Voz.ligada && 'speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }

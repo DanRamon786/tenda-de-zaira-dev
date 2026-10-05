@@ -10,6 +10,25 @@ A Zaira é a do retrato acima: cabelos cor de mel, olhos verdes, lenço vermelho
 
 **Versão estável, divulgada:** https://danramon786.github.io/tenda-de-zaira/
 
+## Idiomas · Languages
+
+A Tenda é bilíngue: **português** e **inglês**. A primeira tela pede a escolha do idioma; depois, um botão 🌐 na entrada troca de idioma a qualquer momento antes da consulta. A escolha fica lembrada neste aparelho.
+
+- Tudo muda junto: textos da tela, falas da Zaira, a voz dela (síntese do navegador em pt-BR ou en-US), o reconhecimento de fala, as palavras de comando e os textos das cartas.
+- Em inglês, as cartas usam os **textos originais em inglês do TAROT (1986)**, de R. K. West; as interpretações por tema foram traduzidas de `data/interpretacoes.json` para `data/interpretacoes_en.json`.
+- Para um link que já abre num idioma, acrescente `?lang=en` ou `?lang=pt` ao endereço (útil em anúncios e divulgação de cada mercado).
+
+*Zaira's Tent is bilingual (Portuguese and English). Choose the language on the first screen; add `?lang=en` to the address to open directly in English. In English the cards use the original 1986 English texts of the TAROT program.*
+
+| Moment | By voice (English) |
+|---|---|
+| Accept the reading | "yes", "sure", "please" |
+| Say your name | "my name is Dan" |
+| Stop shuffling | "stop", "enough" |
+| Cut the deck | "cut at thirty two", "here" |
+| Next card | "next", "continue" |
+| At the end | "new reading", "review", "finish" |
+
 ## Como conversar com a Zaira
 
 | Momento | Pela voz (microfone) | Pela câmera | Pelo toque |
@@ -63,13 +82,17 @@ js/main.js          o Maestro: a consulta passo a passo
 js/cena.js          tenda, mesa, velas, bola de cristal, fumaça, câmera
 js/zaira.js         a Zaira: pose sentada, mãos (cinemática inversa), olhar, piscar, boca
 js/cartas.js        cartas 3D, baralho, leque do corte, imagens do Commons
-js/voz.js           fala (síntese) e escuta (reconhecimento) em português
+js/voz.js           fala (síntese) e escuta (reconhecimento) em português ou inglês
+js/i18n.js          idioma escolhido e textos da tela nos dois idiomas
 js/olhos.js         webcam: presença, olhar, sorriso, aceno
 js/motor.js         sorteio v2 (igual ao TAROTSRT.BAS)
-js/textos.js        falas da Zaira
+js/textos.js        falas da Zaira em português
+js/textos_en.js     falas da Zaira em inglês
 img/zaira.jpg       o retrato da Zaira (tela de entrada)
 ferramentas/        repinta.py: como o modelo de amostra virou a Zaira
-data/cartas.json    as 78 cartas em português
+data/cartas.json    as 78 cartas, em português e no inglês original de 1986
+data/interpretacoes.json     interpretações por tema (português)
+data/interpretacoes_en.json  interpretações por tema (inglês)
 modelo/zaira.vrm    a personagem 3D
 lib/                Three.js, three-vrm e MediaPipe (cópias locais)
 ```

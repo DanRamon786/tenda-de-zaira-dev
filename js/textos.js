@@ -21,7 +21,7 @@ export const POS = [
 export const ACTS = [
   { name: 'O PASSADO', pos: [1, 4, 5], open: ['Comecemos pelo que ficou para trás. O passado é a raiz de tudo o que ainda vai florescer.', 'Antes do amanhã, vamos ouvir o que já foi. As primeiras cartas falam do chão onde você pisa.'] },
   { name: 'O PRESENTE', pos: [2, 3], open: ['Agora, o presente. Aquilo que você é neste instante, aqui diante de mim.', 'Voltemos ao agora. Estas cartas mostram quem você é hoje, e o que você busca.'] },
-  { name: 'O FUTURO', pos: [6], open: ['E então, o que ainda não aconteceu. Não tenha pressa. O futuro gosta de ser olhado com calma.', 'Chegamos ao futuro. Ele não está escrito em pedra, mas as cartas conhecem seus caminhos.'] },
+  { name: 'O FUTURO', futuro: true, pos: [6], open: ['E então, o que ainda não aconteceu. Não tenha pressa. O futuro gosta de ser olhado com calma.', 'Chegamos ao futuro. Ele não está escrito em pedra, mas as cartas conhecem seus caminhos.'] },
   // a parada entre a casa 6 e a 7: a cruz se completa e começa o cajado (casas 7 a 10)
   { name: 'O CAJADO', pausa: true, pos: [7, 8, 9, 10], open: ['A cruz está completa... Respire comigo. Agora eu ergo o cajado: quatro cartas que mostram como você vai caminhar até o que vem.', 'Façamos uma pausa... A cruz já falou. Agora o cajado vai mostrar o caminho, degrau por degrau, até o fim desta leitura.'] }
 ];
@@ -65,7 +65,7 @@ export function synthesis(tiragem, nome, pergunta, leitura = null) {
   const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
   const fim = tiragem[9], ime = tiragem[5];
   const nomesMaiores = lista(maiores.map(t => nomeCorrido(t.card)));
-  let s = pergunta ? `Você me trouxe uma pergunta: “${pergunta}”. ` : 'Você guardou sua pergunta em silêncio, e as cartas respeitaram isso. ';
+  let s = pergunta ? `Você me trouxe uma pergunta: “${pergunta}”${/[.?!…]$/.test(pergunta) ? '' : '.'} ` : 'Você guardou sua pergunta em silêncio, e as cartas respeitaram isso. ';
   s += maj >= 4 ? `Há ${maj} Arcanos Maiores na mesa: ${nomesMaiores}. Forças maiores do que a vontade de um dia estão em movimento na sua vida. `
     : maj === 0 ? 'Nenhum Arcano Maior apareceu. O que vem pela frente depende das suas escolhas de todo dia, não do destino. '
       : maj === 1 ? `Um só Arcano Maior, ${nomesMaiores}, marca o ponto em que o destino encosta a mão no seu caminho. `
@@ -162,3 +162,40 @@ export function numeroFalado(txt) {
   }
   return achou ? n : null;
 }
+
+// ---------- falas do roteiro (o Maestro em main.js escolhe a hora de cada uma) ----------
+export const FALA = {
+  chegue: 'Chegue mais perto da luz das velas. Quero ver o seu rosto.',
+  boasVindas: () => pick(['Ah... você entrou. Eu sabia que viria alguém esta noite. Sente-se, a cadeira é sua.', 'Boas-vindas à minha tenda. Os incensos já estavam acesos, como se esperassem por você.']),
+  apresenta: 'Eu sou Zaira. Leio o Tarô como minha avó lia, e a avó dela antes. Deseja que eu abra as cartas para você?',
+  recusa: 'Nem toda noite é noite de saber. A cortina estará aberta quando você voltar.',
+  pedeNome: 'Como devo chamar você?',
+  nomeBonito: nome => `${nome}... um nome bonito, carrega um som antigo. Agora pense numa pergunta. Pode dizê-la para mim, ou guardá-la só no seu coração.`,
+  embaralha: 'Concentre-se na sua pergunta enquanto eu embaralho. Quando sentir que é a hora, me diga para parar.',
+  abreCorte: 'Abri o baralho diante de você. Toque onde quer cortar, ou me diga um número de 1 a 77. As cartas acima do corte irão para baixo do monte.',
+  cortou: n => pick([`Na carta ${n}. Assim seja.`, `Você cortou na carta ${n}. As cartas já sabem o caminho.`]),
+  distribui: 'As cartas agora encontram seus lugares. Dez casas, uma cruz e um cajado.',
+  despedida: nome => pick([`Obrigada por confiar em mim, ${nome}. Lembre-se: as cartas mostram caminhos, mas quem caminha é você.`, `Eu agradeço a sua visita, ${nome}. O que ouviu aqui é um mapa, não uma sentença. Use-o com coragem.`]),
+  fumaca: 'Leve com você só o que acender uma luz. O resto, deixe aqui na mesa, junto com a fumaça.'
+};
+
+// ---------- palavras que a Zaira entende pela voz ----------
+export const PALAVRAS = {
+  sim: ['sim', 'quero', 'pode', 'leia', 'claro', 'vamos', 'aceito', 'por favor', 'uhum'],
+  nao: ['nao', 'hoje nao', 'agora nao', 'depois'],
+  segue: ['proxima', 'continue', 'continua', 'continuar', 'pode seguir', 'siga', 'segue', 'avante', 'ok', 'certo', 'vai', 'pode', 'entendi'],
+  pare: ['pare', 'para', 'parar', 'chega', 'pronto', 'agora', 'basta', 'stop'],
+  cortaNumero: ['corte', 'corta', 'cortar', 'aqui', 'na', 'no', 'carta'],
+  cortaJa: ['aqui', 'corte', 'corta', 'cortar', 'essa', 'esta', 'pode'],
+  esquerda: ['esquerda', 'menos'], direita: ['direita', 'mais'],
+  obrigado: ['obrigado', 'obrigada', 'agradeco', 'valeu', 'grato', 'grata'],
+  nova: ['nova', 'outra', 'de novo', 'novamente'],
+  rever: ['rever', 'ver', 'mostrar'],
+  finalizar: ['finalizar', 'sair', 'terminar', 'encerrar', 'tchau'],
+  guardar: ['guardar', 'guarde', 'silencio', 'segredo', 'nenhuma', 'pular']
+};
+// "meu nome é Dan" -> "Dan"
+export const limpaNome = s => {
+  const t = s.replace(/^(meu nome (é|e)|eu sou (o|a)?|me chamo|pode me chamar de|sou (o|a)?|é|e)\s+/i, '').replace(/[.!?,]/g, '').trim();
+  return t.split(/\s+/).slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+};

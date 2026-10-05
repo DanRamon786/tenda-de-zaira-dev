@@ -2,6 +2,7 @@
 // carregado do Wikimedia Commons), baralho, embaralhar, leque de corte, Cruz Celta e virada.
 import * as THREE from 'three';
 import { MESA_Y } from './cena.js';
+import { lingua, nomeCarta } from './i18n.js';
 
 export const CW = .1, CH = .172, ESP = .0006;       // carta: largura, altura, espessura
 export const RAIO = CW * .07;                        // raio dos cantos arredondados
@@ -72,7 +73,7 @@ const texVerso = texCanvas(256, 440, (g, w, h) => {
 });
 
 const NAIPE = { cups: '🏆', pentacles: '⛤', swords: '⚔', wands: '⚚' };
-const ROM = ['Rei', 'Rainha', 'Cavaleiro', 'Valete', 'Ás', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+const ROM = { pt: ['Rei', 'Rainha', 'Cavaleiro', 'Valete', 'Ás', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'], en: ['King', 'Queen', 'Knight', 'Page', 'Ace', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'] };
 // frente provisória (enquanto a imagem do Commons não chega). A tela já nasce do tamanho final da carta:
 // a imagem real é depois desenhada DENTRO desta mesma tela. Trocar por uma imagem de outro tamanho
 // não funciona no WebGL (a textura já reservada não muda de tamanho) e a carta ficava com o desenho provisório.
@@ -83,10 +84,10 @@ function texFrenteDesenhada(c) {
     g.fillStyle = '#f3e6c8'; g.fillRect(0, 0, w, h);
     g.strokeStyle = '#2b1a10'; g.lineWidth = 3; rr(g, 14, 14, w - 28, h - 28, w * .07 - 10); g.stroke();
     g.fillStyle = '#2b1a10'; g.textAlign = 'center';
-    g.font = 'bold 30px Georgia, serif'; g.fillText(c.arcana === 'major' ? c.number : ROM[c.rank], w / 2, 62);
+    g.font = 'bold 30px Georgia, serif'; g.fillText(c.arcana === 'major' ? c.number : ROM[lingua()][c.rank], w / 2, 62);
     g.font = '96px serif'; g.fillText(c.arcana === 'major' ? '✶' : NAIPE[c.suit], w / 2, h / 2 + 30);
     g.font = 'bold 19px Georgia, serif';
-    const palavras = c.pt_name.toUpperCase().split(' '); let linha = '', y = h - 70; const linhas = [];
+    const palavras = nomeCarta(c).toUpperCase().split(' '); let linha = '', y = h - 70; const linhas = [];
     for (const p of palavras) { if ((linha + ' ' + p).trim().length > 16) { linhas.push(linha.trim()); linha = p; } else linha += ' ' + p; }
     linhas.push(linha.trim()); y = h - 40 - (linhas.length - 1) * 22;
     for (const l of linhas) { g.fillText(l, w / 2, y); y += 22; }
@@ -177,8 +178,10 @@ function limpaScan(img) {
 const cacheTex = {};
 const loader = new THREE.ImageLoader(); loader.setCrossOrigin('anonymous');
 export function texFrente(c) {
-  if (cacheTex[c.id]) return cacheTex[c.id];
-  const tex = texFrenteDesenhada(c); cacheTex[c.id] = tex;
+  // a frente desenhada traz o nome no idioma da consulta; a imagem real do Commons vale para os dois
+  const ja = cacheTex[c.id];
+  if (ja && (ja.real || ja.lingua === lingua())) return ja;
+  const tex = texFrenteDesenhada(c); tex.lingua = lingua(); cacheTex[c.id] = tex;
   if (urls[c.id]) loader.load(urls[c.id], img => {
     const g = tex.image.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0);
     try { g.drawImage(limpaScan(img), 0, 0, FW, FH); }
